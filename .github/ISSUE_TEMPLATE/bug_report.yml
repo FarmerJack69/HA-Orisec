@@ -1,0 +1,46 @@
+name: Bug report
+description: Something isn't working
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This integration is unofficial: please don't contact Orisec or your installer about it.
+        **Never post your codes or packet captures.**
+  - type: input
+    id: panel
+    attributes:
+      label: Panel model and firmware
+      placeholder: CP50, 9.10
+    validations:
+      required: true
+  - type: dropdown
+    id: link
+    attributes:
+      label: Connection
+      options: [USB, Network (CM2), Serial bridge (ESP32/ser2net)]
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Integration and Home Assistant versions
+      placeholder: 0.4.0 / 2026.11.1
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Settings → System → Logs, filtered on "orisec".
+      render: text
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: Settings → Devices & services → Orisec → ⋮ → Download diagnostics. Codes, IPs, serial and area names are removed; check it before posting anyway. Drag the file here.

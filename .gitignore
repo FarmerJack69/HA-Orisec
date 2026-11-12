@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+# Packet captures contain user/engineer codes. Never commit them.
+*.pcap
+*.pcapng
+*.etl

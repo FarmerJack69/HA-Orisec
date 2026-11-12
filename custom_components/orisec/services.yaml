@@ -1,0 +1,170 @@
+send_key:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: orisec
+    key:
+      required: false
+      example: back
+      selector:
+        select:
+          options: ["0","1","2","3","4","5","6","7","8","9","enter","clear","back","up","down","left","right","full_arm","part_arm","area","omit","chime"]
+    keys:
+      required: false
+      example: '["up", "enter"]'
+      selector:
+        object:
+
+omit_zone:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: orisec
+          domain: binary_sensor
+          multiple: true
+    omit:
+      required: false
+      selector:
+        boolean:
+    code:
+      required: false
+      selector:
+        text:
+          type: password
+
+read_raw:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: orisec
+    reads:
+      required: true
+      example: "[[12, 1, 1]]"
+      selector:
+        object:
+
+get_events:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: orisec
+    start:
+      required: false
+      default: 1
+      selector:
+        number:
+          min: 1
+          max: 1280
+    count:
+      required: false
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 50
+
+test_user_login:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: orisec
+    code:
+      required: true
+      selector:
+        text:
+          type: password
+
+reset:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: orisec
+          multiple: true
+    code:
+      required: false
+      selector:
+        text:
+          type: password
+
+get_notify_settings:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: orisec
+    user_id:
+      required: false
+      selector:
+        text:
+
+set_notify_settings:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: orisec
+    user_id:
+      required: false
+      selector:
+        text:
+    enabled:
+      required: false
+      selector:
+        boolean:
+    categories:
+      required: false
+      example: '["priority", "alarms", "tampers", "faults", "arming"]'
+      selector:
+        select:
+          multiple: true
+          options: ["priority","alarms","tampers","faults","arming","test","restore","custom","chains","zones"]
+    areas:
+      required: false
+      example: "[1]"
+      selector:
+        object:
+    zones:
+      required: false
+      example: "[2, 5]"
+      selector:
+        object:
+    devices:
+      required: false
+      selector:
+        object:
+    critical:
+      required: false
+      selector:
+        boolean:
+    url:
+      required: false
+      example: /alarm-panel/alarm
+      selector:
+        text:
+
+set_clock:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: orisec
+    datetime:
+      required: false
+      example: "2026-11-09 18:30:00"
+      selector:
+        datetime:

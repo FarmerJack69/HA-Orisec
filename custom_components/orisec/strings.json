@@ -1,0 +1,268 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "How is the panel connected?",
+        "menu_options": {
+          "usb": "USB cable (panel micro-USB into this Home Assistant)",
+          "network": "Network (CM2 comms module)",
+          "bridge": "Serial bridge (ESP32 / ser2net over TCP)"
+        }
+      },
+      "reconfigure": {
+        "title": "Change how the panel is connected",
+        "menu_options": {
+          "usb": "USB cable",
+          "network": "Network (CM2)",
+          "bridge": "Serial bridge (TCP)"
+        }
+      },
+      "usb": {
+        "title": "USB connection",
+        "description": "Plug a data micro-USB cable from the panel into this Home Assistant machine (the panel shows up as an STM32 Virtual ComPort), or select a TTL-USB adaptor wired to a COM port set to W-RKP/UDL.",
+        "data": {
+          "host": "IP address",
+          "port": "Port",
+          "password": "User code",
+          "device": "USB serial port",
+          "baud": "Baud rate"
+        },
+        "data_description": {
+          "baud": "USB (STM32 Virtual ComPort) ignores this — leave at 115200. For a TTL adaptor on a physical COM port set to W-RKP/UDL, if no data appears try the other rates."
+        }
+      },
+      "network": {
+        "title": "Network connection",
+        "description": "Use the IP address and port shown on the keypad under Ethernet.",
+        "data": {
+          "host": "IP address",
+          "port": "Port",
+          "password": "User code",
+          "device": "USB serial port"
+        }
+      },
+      "bridge": {
+        "title": "Serial bridge",
+        "description": "A device that relays a panel COM port (set to W-RKP/UDL mode) over TCP.",
+        "data": {
+          "host": "IP address",
+          "port": "Port",
+          "password": "User code",
+          "device": "USB serial port"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Panel rejected the code",
+        "data": {
+          "password": "User code"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "No reply from the panel. Check the cable, port, IP address or bridge settings.",
+      "invalid_auth": "The panel rejected that code.",
+      "invalid_code": "The code must be digits only."
+    },
+    "abort": {
+      "already_configured": "This panel is already set up.",
+      "reconfigure_successful": "Connection updated.",
+      "reauth_successful": "Code updated.",
+      "wrong_panel": "That address belongs to a different panel."
+    }
+  },
+  "services": {
+    "send_key": {
+      "name": "Send keypad key",
+      "description": "Press one or more keys on the panel's virtual keypad.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Panel",
+          "description": "Only needed with more than one panel."
+        },
+        "key": {
+          "name": "Key",
+          "description": "One key, e.g. back, enter, up, 5."
+        },
+        "keys": {
+          "name": "Keys",
+          "description": "A list of keys pressed in order."
+        }
+      }
+    },
+    "omit_zone": {
+      "name": "Omit zone",
+      "description": "Omit or reinstate zones, as the app's Omit button. Only zones the panel allows the user to omit.",
+      "fields": {
+        "entity_id": {
+          "name": "Zones",
+          "description": "Orisec zone sensors."
+        },
+        "omit": {
+          "name": "Omit",
+          "description": "On to omit, off to reinstate. Leave out to toggle."
+        },
+        "code": {
+          "name": "PIN",
+          "description": "Optional panel user code: the omit is done (and logged) as that user."
+        }
+      }
+    },
+    "read_raw": {
+      "name": "Read raw (diagnostic)",
+      "description": "Read-only: send query reads [id, start, count] and return the raw reply blocks.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Panel",
+          "description": "Only needed with more than one panel."
+        },
+        "reads": {
+          "name": "Reads",
+          "description": "List of [id, start, count]."
+        }
+      }
+    },
+    "get_events": {
+      "name": "Get event log",
+      "description": "Read the panel's event log (1 = newest), as the app's Log page.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Panel",
+          "description": "Only needed with more than one panel."
+        },
+        "start": {
+          "name": "Start",
+          "description": "First entry to read (1 = newest)."
+        },
+        "count": {
+          "name": "Count",
+          "description": "How many entries to read."
+        }
+      }
+    },
+    "test_user_login": {
+      "name": "Test user login",
+      "description": "Diagnostic: log in with another panel user's code, then straight back in with the integration's own code. Never arms or disarms.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Panel",
+          "description": "Which panel (only needed with more than one)."
+        },
+        "code": {
+          "name": "User code",
+          "description": "The other user's code. Not stored or logged."
+        }
+      }
+    },
+    "reset": {
+      "name": "Reset",
+      "description": "Reset an area after an alarm or tamper, as the Reset button, optionally as the panel user with the PIN given.",
+      "fields": {
+        "entity_id": {
+          "name": "Area",
+          "description": "The area's Reset button or alarm panel entity."
+        },
+        "code": {
+          "name": "PIN",
+          "description": "Optional panel user code: the reset is done (and logged) as that user."
+        }
+      }
+    },
+    "get_notify_settings": {
+      "name": "Get alarm notification settings",
+      "description": "A user's alarm notification settings, their phones, and the panel's areas and zones.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Panel",
+          "description": "Only needed with more than one panel."
+        },
+        "user_id": {
+          "name": "HA user",
+          "description": "Whose settings (admins only for other users). Default: you."
+        }
+      }
+    },
+    "set_notify_settings": {
+      "name": "Set alarm notification settings",
+      "description": "Choose which panel events a user is notified about, as the official app's per-phone settings.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Panel",
+          "description": "Only needed with more than one panel."
+        },
+        "user_id": {
+          "name": "HA user",
+          "description": "Whose settings (admins only for other users). Default: you."
+        },
+        "enabled": {
+          "name": "Enabled",
+          "description": "Send this user alarm notifications."
+        },
+        "categories": {
+          "name": "Categories",
+          "description": "Kinds of event: priority, alarms, tampers, faults, arming, test, restore, custom, chains, zones."
+        },
+        "areas": {
+          "name": "Areas",
+          "description": "Area numbers to notify about (empty = all)."
+        },
+        "zones": {
+          "name": "Zones",
+          "description": "Zone numbers that notify when they go active (with the Zones category)."
+        },
+        "devices": {
+          "name": "Phones",
+          "description": "Companion-app devices (config entry ids) to send to (empty = all the user's phones)."
+        },
+        "critical": {
+          "name": "Critical alerts",
+          "description": "Send Priority and Alarms as critical alerts that sound through silent / Do Not Disturb."
+        },
+        "url": {
+          "name": "Open on tap",
+          "description": "Dashboard path to open when the notification is tapped."
+        }
+      }
+    },
+    "set_clock": {
+      "name": "Set panel clock",
+      "description": "Set the panel's time and date to Home Assistant's local time (or to the date and time given).",
+      "fields": {
+        "config_entry_id": {
+          "name": "Panel",
+          "description": "Only needed with more than one panel."
+        },
+        "datetime": {
+          "name": "Date and time",
+          "description": "Leave empty to use Home Assistant's current local time."
+        }
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "zone": {
+        "state": {
+          "off": "Healthy",
+          "on": "Active"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Orisec options",
+        "data": {
+          "poll_interval": "Poll interval (seconds)",
+          "clock_sync": "Keep the panel clock in sync with Home Assistant",
+          "clock_tolerance": "Clock drift allowed (seconds)"
+        },
+        "data_description": {
+          "poll_interval": "How often to ask the panel for status. 2 is responsive; higher is gentler on the CM2.",
+          "clock_sync": "Sets the panel's time and date to HA's when it drifts, at most once an hour, never while an area is setting, in entry or in alarm. Turn off the panel's own \"sync clock from cloud\" so the two don't compete.",
+          "clock_tolerance": "Sync when the panel is this many seconds ahead of or behind HA."
+        }
+      }
+    }
+  }
+}
