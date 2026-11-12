@@ -62,7 +62,7 @@ Pick a connection when you add the integration. All three carry the same message
 | Type | What you need | Notes |
 |---|---|---|
 | **USB** | A micro-USB data cable from the panel PCB to the HA machine | The panel appears as an STM32 Virtual ComPort (`/dev/serial/by-id/usb-STMicroelectronics_STM32_Virtual_ComPort_...`). Baud rate doesn't matter. The simplest if HA is near the panel. |
-| **Network** | A CM2 module with a static IP | Port 20202 by default. To find the CM2's IP address and port at the keypad: enter your user code, choose **Change Settings → About** and scroll down. Some CM2s stop answering until the panel's network settings are saved again; USB or the bridge avoid this. |
+| **Network** | A CM2 module with a static IP | Port 20202 by default. To find the CM2's IP address and port at the keypad: enter your user code, choose **Change Settings → About** and scroll down. On newer panel firmware the user can also set the CM2's IP address and port under **Change Settings → Comms Modules**; older firmware may not have this, so ask your installer. Some CM2s stop answering until the panel's network settings are saved again; USB or the bridge avoid this. |
 | **Serial bridge** | An ESP32 (or ser2net) on a panel COM port | Port 6638 by default. Ready-made ESPHome config and wiring: [`esphome/`](esphome/README.md). Set the COM port to **Mode 0**, 115200 baud. |
 
 Only one client at a time on a link: close UDL or anything else talking to the same port.
