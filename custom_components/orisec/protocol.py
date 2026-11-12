@@ -1,7 +1,7 @@
 """Orisec ControlPlus local UDP protocol.
 
 Pure Python with no Home Assistant imports, so it can be tested and reused on its own.
-See docs/protocol.md for the details.
+The comments next to each read and parser describe the bytes.
 
 Frame (plain form, as accepted and answered by the panel):
 

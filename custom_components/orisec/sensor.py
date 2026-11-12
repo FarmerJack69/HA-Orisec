@@ -15,8 +15,9 @@ from homeassistant.const import (
     UnitOfTime,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST
+from homeassistant.const import CONF_HOST, MAJOR_VERSION, MINOR_VERSION
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -25,9 +26,12 @@ from .bridge import find_bridge
 from .client import TRANSPORT_TCP
 from .const import CONF_TRANSPORT, DOMAIN, MANUFACTURER
 from .coordinator import OrisecCoordinator
-from .entity import OrisecEntity
+from .entity import OrisecEntity, panel_device_info
 
 _LOGGER = logging.getLogger(__name__)
+# HA 2026.8 replaced DeviceInfo's via_device (identifiers) with via_device_id;
+# the old key stops working in 2027.8. hacs.json still allows older HA.
+_VIA_DEVICE_ID = (MAJOR_VERSION, MINOR_VERSION) >= (2026, 8)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEntitiesCallback) -> None:
@@ -40,10 +44,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEnt
             if kind == "signal2" and (w is None or w.signal2 is None):
                 continue
             entities.append(OrisecWirelessSensor(coordinator, zone, names.get(zone, f"Zone {zone}"), kind))
-    for slot in coordinator.config.device_slots:
-        d = coordinator.devices[slot]
-        for kind in (*p.DEVICE_READINGS.get(d.kind, ("voltage",)), "poll_errors", "crc_errors"):
-            entities.append(OrisecDeviceSensor(coordinator, d, kind))
+    if coordinator.config.device_slots:
+        # Network devices hang off the panel's device, so register that first
+        # and link them to it by its device id.
+        panel = dr.async_get(hass).async_get_or_create(config_entry_id=entry.entry_id, **panel_device_info(coordinator))
+        for slot in coordinator.config.device_slots:
+            d = coordinator.devices[slot]
+            for kind in (*p.DEVICE_READINGS.get(d.kind, ("voltage",)), "poll_errors", "crc_errors"):
+                entities.append(OrisecDeviceSensor(coordinator, d, kind, panel.id))
     if coordinator.panel_power is not None:
         entities += [OrisecPanelPowerSensor(coordinator, kind) for kind in _PANEL_POWER_KINDS]
     add(entities)
@@ -231,7 +239,7 @@ class OrisecDeviceSensor(OrisecEntity, SensorEntity):
 
     _attr_state_class = SensorStateClass.MEASUREMENT
 
-    def __init__(self, coordinator: OrisecCoordinator, device: p.DeviceInfo, kind: str) -> None:
+    def __init__(self, coordinator: OrisecCoordinator, device: p.DeviceInfo, kind: str, panel_device_id: str) -> None:
         super().__init__(coordinator, f"device_{device.slot}_{kind}")
         self._slot = device.slot
         self._kind = kind
@@ -252,12 +260,15 @@ class OrisecDeviceSensor(OrisecEntity, SensorEntity):
             self._attr_suggested_display_precision = 0
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"{self._serial}_device_{device.slot}")},
-            via_device=(DOMAIN, self._serial),
             manufacturer=MANUFACTURER,
             model=device.model,
             name=f"Orisec {device.name}",
             sw_version=device.software,
         )
+        if _VIA_DEVICE_ID:
+            self._attr_device_info["via_device_id"] = panel_device_id
+        else:  # Home Assistant before 2026.8
+            self._attr_device_info["via_device"] = (DOMAIN, self._serial)
 
     @property
     def native_value(self):

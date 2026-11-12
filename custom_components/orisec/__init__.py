@@ -17,6 +17,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady,
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.typing import ConfigType
+from homeassistant.loader import async_get_integration
 from homeassistant.util import dt as dt_util
 
 from . import protocol as p
@@ -115,7 +116,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     await hass.http.async_register_static_paths([
         StaticPathConfig(CARD_URL, str(Path(__file__).parent / "frontend" / "orisec-keypad-card.js"), False)
     ])
-    frontend.add_extra_js_url(hass, CARD_URL)
+    # The version in the URL makes browsers fetch the new card after an update
+    # (the plain URL can stay cached). No dashboard resource needed.
+    version = (await async_get_integration(hass, DOMAIN)).version
+    frontend.add_extra_js_url(hass, f"{CARD_URL}?v={version}")
 
     def panel(call: ServiceCall) -> OrisecCoordinator:
         """The panel a service call is for: the only one loaded, or `config_entry_id`."""

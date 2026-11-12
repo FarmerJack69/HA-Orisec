@@ -69,7 +69,7 @@ Only one client at a time on a link: close UDL or anything else talking to the s
 
 ## Keypad card
 
-The card is served by the integration. If it shows "Configuration error" after a restart, add it as a dashboard resource (**Settings → Dashboards → ⋮ → Resources**): URL `/orisec_files/orisec-keypad-card.js?v=0.4.0`, type *JavaScript module*. Change `v=` after each update so browsers fetch the new version.
+The integration loads the card itself, with its version in the address, so after an update a normal refresh of the browser or app is enough. You don't need a dashboard resource for it; if you added `orisec-keypad-card.js` under **Settings → Dashboards → ⋮ → Resources** for an earlier version, remove it.
 
 ```yaml
 type: custom:orisec-keypad-card
