@@ -6,7 +6,9 @@ A local Home Assistant integration for **Orisec intruder alarm panels**, with a 
 
 > **Unofficial.** This project has no connection with Orisec Ltd and isn't endorsed or supported by them. "Orisec" and "ControlPlus" are Orisec's names, used here only to say which panels this works with. Don't contact Orisec or your installer about this integration; [open an issue](../../issues) instead.
 
-> **Status: 0.4.0, early public release.** Used daily on a CP50 (firmware 9.10). Other panels and firmware are untested: reports welcome.
+> **Status: 0.4.1, early public release.** Used daily on a CP50 (firmware 9.10). Other panels and firmware are untested: reports welcome.
+
+[![Open your Home Assistant instance and open this repository in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=FarmerJack69&repository=HA-Orisec&category=integration)
 
 ## Screenshots
 
@@ -47,7 +49,9 @@ A local Home Assistant integration for **Orisec intruder alarm panels**, with a 
 
 ### HACS (recommended)
 
-1. HACS → ⋮ → **Custom repositories** → add `https://github.com/FarmerJack69/HA-Orisec`, type **Integration**.
+[![Open your Home Assistant instance and open this repository in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=FarmerJack69&repository=HA-Orisec&category=integration)
+
+1. Click the button above (it opens HACS in your own Home Assistant with this repository filled in), or add it by hand: HACS → ⋮ → **Custom repositories** → `https://github.com/FarmerJack69/HA-Orisec`, type **Integration**.
 2. Install **Orisec (unofficial)** and restart Home Assistant.
 3. **Settings → Devices & services → Add integration → Orisec**.
 
