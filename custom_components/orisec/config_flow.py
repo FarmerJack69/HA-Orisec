@@ -29,7 +29,15 @@ from .const import (
 from .protocol import DEFAULT_PORT
 
 _BY_ID = "/dev/serial/by-id"
-_MENU = ["usb", "network", "bridge"]
+# Labels are given here as well as in translations/en.json: Home Assistant shows
+# these directly, so the choices still read correctly when the browser holds an
+# older copy of the translations (for example after replacing another `orisec`
+# integration), where a plain list showed blank buttons.
+_MENU = {
+    "usb": "USB cable (panel micro-USB into this Home Assistant)",
+    "network": "Network (CM2 comms module)",
+    "bridge": "Serial bridge (ESP32 / ser2net over TCP)",
+}
 
 
 def _serial_ports() -> list[str]:

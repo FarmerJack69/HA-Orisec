@@ -6,7 +6,7 @@ A local Home Assistant integration for **Orisec intruder alarm panels**, with a 
 
 > **Unofficial.** This project has no connection with Orisec Ltd and isn't endorsed or supported by them. "Orisec" and "ControlPlus" are Orisec's names, used here only to say which panels this works with. Don't contact Orisec or your installer about this integration; [open an issue](../../issues) instead.
 
-> **Status: 0.4.1, early public release.** Used daily on a CP50 (firmware 9.10). Other panels and firmware are untested: reports welcome.
+> **Status: 0.4.2, early public release.** Used daily on a CP50 (firmware 9.10). Other panels and firmware are untested: reports welcome.
 
 [![Open your Home Assistant instance and open this repository in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=FarmerJack69&repository=HA-Orisec&category=integration)
 
@@ -72,6 +72,8 @@ Pick a connection when you add the integration. All three carry the same message
 Only one client at a time on a link: close UDL or anything else talking to the same port.
 
 ## Keypad card
+
+It is one card, **Orisec alarm**, with tabs for Home, Zones, Activity, Log and Keypad (the screenshots above are its tabs). To add it: edit a dashboard → **Add card** → search for "Orisec", or add a **Manual** card with the YAML below. It shows up after the restart that follows installing and a refresh of the browser. In the Companion app, use **Settings → Companion app → Debugging → Reset frontend cache**.
 
 The integration loads the card itself, with its version in the address, so after an update a normal refresh of the browser or app is enough. You don't need a dashboard resource for it; if you added `orisec-keypad-card.js` under **Settings → Dashboards → ⋮ → Resources** for an earlier version, remove it.
 

@@ -2,6 +2,11 @@
 
 Newest first. Versions match `version` in `custom_components/orisec/manifest.json`.
 
+## 0.4.2 (Nov 2026)
+
+- The first setup screen (USB / Network / Serial bridge) always shows its labels. Before, the three buttons could show blank, with just an arrow, if your browser still had text cached from an older Orisec integration. Reconfigure gets the same fix.
+- README: the keypad card is one card, **Orisec alarm**, with tabs. The section now says how to add it and how to refresh the Companion app.
+
 ## 0.4.1 (Nov 2026)
 
 - The keypad card now loads with its version in the address, so after an update a normal refresh picks up the new card. No dashboard resource is needed: if you added one for `orisec-keypad-card.js` by hand, remove it.
