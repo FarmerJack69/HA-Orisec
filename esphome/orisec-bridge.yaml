@@ -24,9 +24,14 @@ esp32:
   framework:
     type: arduino
 
-# Raw TCP <-> UART bridge
+# Raw TCP <-> UART bridge: a copy of oxan/esphome-stream-server that also drops
+# dead client connections (see components/stream_server/README.md).
 external_components:
-  - source: github://oxan/esphome-stream-server
+  - source:
+      type: git
+      url: https://github.com/FarmerJack69/HA-Orisec
+      ref: main
+      path: esphome/components
     components: [stream_server]
 
 logger:
