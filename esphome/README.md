@@ -47,7 +47,22 @@ For the card to find the bridge, the Orisec integration's host and the ESPHome d
 ## Troubleshooting
 - **Panel link connected** goes off: the integration lost its TCP connection (Wi-Fi or the ESP32). **Uptime** going back to zero means the ESP32 restarted. It only says whether *any* client is connected, so for "is HA talking to the panel" watch the alarm entity going unavailable instead.
 - A **Panel link clients** count of 2 or more has two causes:
-  - **A stale connection** (harmless). If Wi-Fi drops (a scheduled router reboot, say), the integration gives up and reconnects, but its old connection never closes on the ESP32, which keeps counting it. No requests come from it, so nothing gets mixed up. The bridge's **Restart** button clears it.
+  - **A stale connection** (harmless). If Wi-Fi drops (a scheduled router reboot, say), the integration gives up and reconnects, but its old connection never closes on the ESP32, which keeps counting it. No requests come from it, so nothing gets mixed up. The bridge's **Restart** button clears it. To clear them automatically, add an automation that restarts the bridge once the count has stayed above 1 for a while (it only fires when the count rises, so press Restart once by hand to clear any already there). Adjust the entity IDs to match yours:
+    ```yaml
+    alias: Orisec bridge - clear stale connections
+    mode: single
+    triggers:
+      - trigger: numeric_state
+        entity_id: sensor.orisec_bridge_panel_link_clients
+        above: 1
+        for:
+          minutes: 30
+    actions:
+      - action: button.press
+        target:
+          entity_id: button.orisec_bridge_restart
+    ```
+    The integration reconnects within a few seconds of the restart. Don't use this if you deliberately run a second client.
   - **A second real client** (a problem). Something else, such as UDL or another HA, is connected too. Both clients' requests reach the panel and their replies get mixed up, so keep it to one.
 - Short dropouts while Wi-Fi restarts are normal: the integration marks the panel unavailable after about 10 seconds of silence and logs back in by itself when the link returns.
 - Keep `reboot_timeout: 0s` under `api:`. Otherwise the ESP32 reboots every 15 minutes when nothing connects to its ESPHome API.
