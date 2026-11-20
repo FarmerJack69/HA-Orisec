@@ -31,8 +31,15 @@ Set the COM port you wired to **Mode 0 (W-RKP/UDL)**, at **115200** baud. If you
    wifi_password: "your-wifi-password"
    ota_password: "pick-a-password"
    orisec_bridge_ap_password: "pick-a-password"   # fallback hotspot, 8+ characters
-   orisec_bridge_api_key: "..."                    # 32-byte base64: `openssl rand -base64 32`
+   orisec_bridge_api_key: "paste-a-generated-key"  # see below
    ```
+   In the ESPHome Device Builder, **Secrets** (top right) opens this file.
+
+   **The API key** encrypts the link between Home Assistant and the bridge. It isn't something you look up: you make one up once, and it must be a random 32-byte key written in base64 (44 characters ending in `=`). Easiest ways to get one:
+   - Open the [ESPHome API docs page](https://esphome.io/components/api/): it shows a freshly generated key under `encryption:` each time it loads. Copy it.
+   - Or, in Home Assistant's **Terminal & SSH** app (or any Linux/Mac terminal), run `openssl rand -base64 32`.
+
+   Keep it in `secrets.yaml` only. You won't normally need it again: if you use the ESPHome Device Builder app, Home Assistant picks the key up from it by itself when it adds the bridge.
 3. Plug the ESP32 into the computer and **Install → Plug into this computer** (or `esphome run orisec-bridge.yaml`). Later updates go over Wi-Fi.
 4. Give the ESP32 a fixed IP address on your router (DHCP reservation).
 
@@ -40,7 +47,7 @@ Set the COM port you wired to **Mode 0 (W-RKP/UDL)**, at **115200** baud. If you
 Add the Orisec integration (or **Reconfigure** an existing one), choose **Serial bridge**, and enter the ESP32's IP address and port **6638**.
 
 ## Adopt the bridge in Home Assistant (recommended)
-HA usually discovers the bridge: accept it under **Settings → Devices & services** and paste the `orisec_bridge_api_key`. The bridge then shows Wi-Fi signal, uptime and **Panel link connected** in HA, and the keypad card's settings page (cog) shows a **Serial bridge** section with the Wi-Fi strength, link state and uptime.
+HA usually discovers the bridge: accept it under **Settings → Devices & services**. If it asks for an encryption key, paste the `orisec_bridge_api_key` from `secrets.yaml` (with the ESPHome Device Builder app it usually fills this in by itself). The bridge then shows Wi-Fi signal, uptime and **Panel link connected** in HA, and the keypad card's settings page (cog) shows a **Serial bridge** section with the Wi-Fi strength, link state and uptime.
 
 For the card to find the bridge, the Orisec integration's host and the ESPHome device's host must be the same: both the IP address, or both the same hostname.
 
