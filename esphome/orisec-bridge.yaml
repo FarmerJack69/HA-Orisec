@@ -41,8 +41,11 @@ api:
   # Keep the bridge running even when HA's ESPHome link is down (the default
   # 15 min would reboot the ESP32 whenever the bridge isn't adopted in HA).
   reboot_timeout: 0s
-  encryption:
-    key: !secret orisec_bridge_api_key
+  # Optional: encrypt the link between Home Assistant and the bridge (its
+  # diagnostics and Restart button). Uncomment the next two lines and add
+  # orisec_bridge_api_key to secrets.yaml; see "Optional: encryption" in README.md.
+  # encryption:
+  #   key: !secret orisec_bridge_api_key
 
 ota:
   platform: esphome
