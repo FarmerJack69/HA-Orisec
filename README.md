@@ -6,7 +6,7 @@ A local Home Assistant integration for **Orisec intruder alarm panels**, with a 
 
 > **Unofficial.** This project has no connection with Orisec Ltd and isn't endorsed or supported by them. "Orisec" and "ControlPlus" are Orisec's names, used here only to say which panels this works with. Don't contact Orisec or your installer about this integration; [open an issue](../../issues) instead.
 
-> **Status: 0.4.3, early public release.** Used daily on a CP50 (firmware 9.10). Other panels and firmware are untested: reports welcome.
+> **Status: 0.4.4, early public release.** Used daily on a CP50 (firmware 9.10); testers report it working on a CP60 and a WCP40. Other panels and firmware are untested: reports welcome.
 
 [![Open your Home Assistant instance and open this repository in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=FarmerJack69&repository=HA-Orisec&category=integration)
 
@@ -21,7 +21,7 @@ A local Home Assistant integration for **Orisec intruder alarm panels**, with a 
 - **Alarm panel** per area your user code controls: full set, part sets 1–3 (labelled with your panel's own part-set names), disarm, and live *arming*, *entry* and *triggered* states.
 - **Zone sensors** named from the panel (**Healthy / Active**), with `zone_type`, `areas`, `tamper`, `omitted`, `can_omit`, `since` and `activations` attributes. *Not Used* and keyswitch zones are skipped.
 - **Wireless zones**: temperature, battery, signal (both directions on two-way devices) and time since last poll for each wireless device.
-- **Network devices** (keypads, wireless expanders, external sounders): each is its own device, with light level, voltage, current and comms error counts; sounders also report their own battery.
+- **Network devices** (keypads, expanders, external sounders): each is its own device, named by model and network address as the panel shows it (e.g. "Orisec TK-1250 1,1"), with light level, voltage, current and comms error counts; sounders also report their own battery.
 - **Panel power** and **fault sensors**: supply and battery voltage, currents, mains fault, battery fault, tamper, trouble, engineer required.
 - **Keypad display** sensor (the live LCD) and an `orisec.send_key` action.
 - **Keypad card**: Home (areas, Full / part sets / Disarm / Quick Arm / Reset), Zones (status, signal, Omit, Notify), Activity, Log (the panel's event log) and Keypad (every key and the live LCD with status icons). Haptic feedback in the Companion app, asterisks that appear as you type, and a clock that ticks like the wall keypad's.

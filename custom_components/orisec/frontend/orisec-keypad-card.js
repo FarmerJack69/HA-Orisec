@@ -709,7 +709,7 @@ class OrisecKeypadCard extends HTMLElement {
       const e = [d.poll_errors ? `${d.poll_errors} poll` : "", d.crc_errors ? `${d.crc_errors} CRC` : ""].filter(Boolean);
       const errs = e.length ? ` · ${e.join(", ")} error${(d.poll_errors || 0) + (d.crc_errors || 0) > 1 ? "s" : ""}` : "";
       // Short names so a row fits a phone; the model only when it adds something.
-      const name = d.kind === "sounder" ? String(d.name).replace("External sounder", "Sounder") : d.name;
+      const name = d.name;
       const model = d.model && !String(d.name).startsWith(d.model) ? `${this._esc(d.model)} · ` : "";
       return `<div class="drow"><ha-icon icon="${icons[d.kind] || "mdi:chip"}"></ha-icon>
         <b>${this._esc(name)}</b><span class="vals">${vals.join("")}</span>

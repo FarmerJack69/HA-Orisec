@@ -15,7 +15,7 @@ def dev(slot, hexdata):
 
 def test_keypad():
     d = dev(1, KEYPAD)
-    assert (d.kind, d.address, d.name, d.model, d.software) == ("keypad", 1, "Keypad 1", "TK-650/1250", "1.45")
+    assert (d.kind, d.address, d.name, d.model, d.software) == ("keypad", 1, "TK-1250 1,1", "TK-1250", "1.45")
     assert (d.light_raw, d.light) == (340, 10)  # hall light had been on: 10 % expected
     assert d.voltage_raw == 3408 and 12.5 < d.voltage < 12.7
     assert d.current == 0
@@ -23,13 +23,15 @@ def test_keypad():
 
 def test_expander():
     d = dev(11, EXPANDER)
-    assert (d.kind, d.address, d.name, d.model, d.software) == ("expander", 1, "Wireless expander 1", "W-XP-R", "2.08")
+    assert (d.kind, d.address, d.name, d.model, d.software) == ("expander", 1, "W-XP-R 1,1", "W-XP-R", "2.08")
+    assert d.wireless
     assert d.voltage == round(3648 / 270, 2) == 13.51  # expected 13.50 V
 
 
 def test_sounders():
     a, b = dev(27, SOUNDER_1), dev(28, SOUNDER_2)
-    assert (a.name, a.software, b.name, b.software) == ("External sounder 1", "2.34", "External sounder 2", "3.00")
+    assert (a.name, a.software, b.name, b.software) == ("Bell 1,1", "2.34", "Bell 1,2", "3.00")
+    assert (a.kind, a.model, a.wireless) == ("sounder", "Bell", False)
     assert (a.light_raw, a.light, b.light_raw, b.light) == (160, 4, 72, 2)
     assert a.current == 246.8 and b.current == 246.4  # expected 246 mA
 
@@ -43,14 +45,31 @@ def test_light_percent():
 def test_empty_and_slots():
     assert parse_device(Block(Q_DEVICES, 5, 1, bytes(42))) is None
     assert parse_device(Block(Q_DEVICES, 2, 1, bytes(3) + b"\x80" + bytes(38))) is None
-    assert device_kind(10) == ("keypad", 10, "Keypad 10")
-    assert device_kind(26) == ("expander", 16, "Wireless expander 16")
-    assert device_kind(30) == ("sounder", 4, "External sounder 4")
+    assert device_kind(10) == ("keypad", 10, "Keypad 1,10")
+    assert device_kind(26) == ("expander", 16, "Expander 1,16")
+    assert device_kind(30) == ("sounder", 4, "Sounder 1,4")
     # The type byte wins over the slot range; the address still comes from the slot.
-    assert device_kind(1, 0x02) == ("keypad", 1, "Keypad 1")
-    assert device_kind(12, 0x02) == ("keypad", 12, "Keypad (slot 12)")
-    assert device_kind(5, 0x99) == ("keypad", 5, "Keypad 5")  # unknown type: slot range decides
-    assert device_kind(40) == ("device", 40, "Device 40")
+    assert device_kind(1, 0x02) == ("keypad", 1, "TK-1250 1,1")
+    assert device_kind(12, 0x02) == ("keypad", 12, "TK-1250 (slot 12)")
+    assert device_kind(5, 0x99) == ("keypad", 5, "Keypad 1,5")  # unknown type: slot range decides
+    assert device_kind(40) == ("device", 40, "Device (slot 40)")
+
+
+def test_models():
+    """A CP60 with RK-720 keypads and wired ZX-10 expanders (20 Nov 2026)."""
+    assert device_kind(1, 0x10) == ("keypad", 1, "RK-720/920 1,1")
+    assert device_kind(2, 0x10) == ("keypad", 2, "RK-720/920 1,2")
+    assert device_kind(11, 0x03) == ("expander", 1, "ZX-10 1,1")
+    assert device_kind(12, 0x05) == ("expander", 2, "PZX-10 1,2")
+    assert device_kind(13, 0x0E) == ("expander", 3, "ROX-10 1,3")
+    assert device_kind(14, 0x11) == ("expander", 4, "W-XP2 1,4")
+    assert device_kind(27, 0x0D) == ("sounder", 1, "INT-CS 1,1")
+    assert device_kind(3, 0x08) == ("keypad", 3, "Int.Prox 1,3")  # kind not known: slot decides
+    zx = dev(11, EXPANDER[:18] + "03" + EXPANDER[20:])
+    assert (zx.name, zx.model, zx.wireless) == ("ZX-10 1,1", "ZX-10", False)
+    rk = dev(1, KEYPAD[:18] + "10" + KEYPAD[20:])
+    assert (rk.kind, rk.name, rk.model, rk.wireless) == ("keypad", "RK-720/920 1,1", "RK-720/920", False)
+    assert dev(1, KEYPAD[:18] + "99" + KEYPAD[20:]).model == "Type 0x99"
 
 
 def test_sounder_battery():

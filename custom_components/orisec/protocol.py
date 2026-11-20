@@ -608,7 +608,7 @@ def signal_percent(raw: int) -> int:
 # Slot = address + offset: keypads 1-10, wireless expanders 11-26, external
 # sounders 27-30 (seen on a CP50: keypad 1 = slot 1, expander 1 = 11,
 # sounders 1 and 2 = 27 and 28; the range ends are inferred).
-#   [0] 0x08 when a device is there   [9] device type
+#   [0] 0x08 when a device is there   [9] device model (DEVICE_TYPES)
 #   [10] software minor, [11] major (0x2D 0x01 = 1.45)
 #   [12:14] light, u16; % = raw // 33 (keypads and sounders)
 #   [14:16] temperature, raw (conversion not known yet)
@@ -622,11 +622,34 @@ Q_DEVICES = 12510
 DEVICE_SLOTS = 30
 DEVICE_KINDS = (  # (kind, first slot, last slot, name)
     ("keypad", 1, 10, "Keypad"),
-    ("expander", 11, 26, "Wireless expander"),
-    ("sounder", 27, 30, "External sounder"),
+    ("expander", 11, 26, "Expander"),
+    ("sounder", 27, 30, "Sounder"),
 )
-DEVICE_MODELS = {0x02: "TK-650/1250", 0x04: "External sounder", 0x07: "W-XP-R"}
-DEVICE_TYPE_KINDS = {0x02: "keypad", 0x04: "sounder", 0x07: "expander"}
+DEVICE_NETWORK = 1  # every device seen so far is on network 1; the panel shows "1,<address>"
+# Device model names by type byte ([9]), with the kind where it's clear
+# (None: the slot range decides). The same codes on every panel family.
+DEVICE_TYPES: dict[int, tuple[str, str | None]] = {
+    0x01: ("Keypad", "keypad"),
+    0x02: ("TK-1250", "keypad"),
+    0x03: ("ZX-10", "expander"),
+    0x04: ("Bell", "sounder"),
+    0x05: ("PZX-10", "expander"),
+    0x06: ("W-XP", "expander"),
+    0x07: ("W-XP-R", "expander"),
+    0x08: ("Int.Prox", None),
+    0x09: ("Onboard", None),
+    0x0A: ("LCD-400", "keypad"),
+    0x0B: ("LED-400", "keypad"),
+    0x0C: ("LCD-450", "keypad"),
+    0x0D: ("INT-CS", "sounder"),
+    0x0E: ("ROX-10", "expander"),
+    0x0F: ("Voice Unit", None),
+    0x10: ("RK-720/920", "keypad"),
+    0x11: ("W-XP2", "expander"),
+}
+WIRELESS_TYPES = frozenset({0x06, 0x07, 0x11})
+DEVICE_MODELS = {code: model for code, (model, _) in DEVICE_TYPES.items()}
+DEVICE_TYPE_KINDS = {code: kind for code, (_, kind) in DEVICE_TYPES.items() if kind}
 # The readings that apply to each kind (the others are meaningless for it).
 DEVICE_READINGS = {
     "keypad": ("light", "voltage"),
@@ -640,16 +663,19 @@ def device_kind(slot: int, device_type: int | None = None) -> tuple[str, int, st
 
     The kind comes from the device type byte when it's a known one, so a
     device is never named after the wrong kind even if the slot ranges
-    (inferred on a CP50) turn out different; the address comes from the slot."""
+    (inferred on a CP50) turn out different; the address comes from the slot.
+    The name is the model and "network,address", as the panel shows it
+    ("TK-1250 1,1"); an unknown model is named after its kind ("Keypad 1,3")."""
     by_slot = next((k for k in DEVICE_KINDS if k[1] <= slot <= k[2]), None)
     kind = DEVICE_TYPE_KINDS.get(device_type) or (by_slot[0] if by_slot else "device")
     info = next((k for k in DEVICE_KINDS if k[0] == kind), None)
+    label = DEVICE_MODELS.get(device_type) or (info[3] if info else "Device")
     if info is None:
-        return "device", slot, f"Device {slot}"
+        return "device", slot, f"{label} (slot {slot})"
     if by_slot is not None and by_slot[0] == kind:
         address = slot - info[1] + 1
-        return kind, address, f"{info[3]} {address}"
-    return kind, slot, f"{info[3]} (slot {slot})"  # type and slot range disagree
+        return kind, address, f"{label} {DEVICE_NETWORK},{address}"
+    return kind, slot, f"{label} (slot {slot})"  # type and slot range disagree
 
 
 @dataclass
@@ -685,6 +711,10 @@ class DeviceInfo:
     @property
     def model(self) -> str:
         return DEVICE_MODELS.get(self.device_type, f"Type 0x{self.device_type:02X}")
+
+    @property
+    def wireless(self) -> bool:
+        return self.device_type in WIRELESS_TYPES
 
     @property
     def light(self) -> int:

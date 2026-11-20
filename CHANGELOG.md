@@ -2,6 +2,12 @@
 
 Newest first. Versions match `version` in `custom_components/orisec/manifest.json`.
 
+## 0.4.4 (Nov 2026)
+
+- **Network devices are named by model and network address**, the way the panel shows them: for example "Orisec TK-1250 1,1", "Orisec RK-720/920 1,2", "Orisec ZX-10 1,1", "Orisec Bell 1,2". Unknown models are named after their kind ("Keypad 1,3").
+- **Corrected names for some devices that were showing incorrectly**: wired expanders were shown as "Wireless expander", and some keypads and expanders showed a code ("Type 0x10") in place of their model.
+- Existing entity IDs don't change; only the device names update. A device you've renamed yourself keeps your name.
+
 ## 0.4.3 (Nov 2026)
 
 A more responsive keypad and faster polling over USB and the serial bridge.
