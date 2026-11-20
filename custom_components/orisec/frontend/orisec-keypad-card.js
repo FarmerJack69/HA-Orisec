@@ -49,6 +49,9 @@ const LOG_ICONS = [
 const logIcon = (t) => LOG_ICONS.find(([re]) => re.test(t || "")) || [0, "mdi:information-outline", "#9e9e9e"];
 const LOG_PAGE = 10;
 // Activity groups as in the app: minutes, then hours, back to 12 hours.
+// Longest an empty screen from the panel is covered by the previous one (ms).
+const BLANK_HOLD_MS = 1500;
+
 const ACT_BUCKETS = [5, 10, 30, 60, 120, 180, 300, 720];
 const ACT_WINDOW_MIN = ACT_BUCKETS[ACT_BUCKETS.length - 1];
 const actLabel = (m) => (m < 60 ? `${m} Minutes` : m === 60 ? "1 Hour" : `${m / 60} Hours`);
@@ -305,12 +308,27 @@ class OrisecKeypadCard extends HTMLElement {
     if (!this._built) this._build();
     this._render();
     if (first) {
-      this._tick = setInterval(() => this._refreshTimes(), 15000);
+      this._startTimers();
       this._loadNotify();  // bell state and the zones' Notify buttons
     }
   }
 
-  disconnectedCallback() { clearInterval(this._tick); }
+  connectedCallback() { if (this._hass) this._startTimers(); }
+  disconnectedCallback() { clearInterval(this._tick); clearInterval(this._clkTick); this._tick = this._clkTick = null; }
+
+  _startTimers() {
+    if (!this._tick) this._tick = setInterval(() => this._refreshTimes(), 15000);
+    // The panel only sends "show the time here"; like the wall keypad, the card ticks it.
+    if (!this._clkTick) this._clkTick = setInterval(() => this._tickClock(), 200);
+  }
+
+  // A light tap: the Companion app turns this into a native haptic (iOS and Android);
+  // other browsers fall back to the vibration API where there is one.
+  _haptic(kind = "light") {
+    window.dispatchEvent(new CustomEvent("haptic", { detail: kind }));
+    const app = window.externalApp || (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.externalBus);
+    if (!app && navigator.vibrate) navigator.vibrate(kind === "medium" ? 30 : 15);
+  }
 
   // ------------------------------------------------------------- discovery
   _discover() {
@@ -409,7 +427,8 @@ class OrisecKeypadCard extends HTMLElement {
   async _press(btn) {
     btn.classList.add("hit");
     setTimeout(() => btn.classList.remove("hit"), 140);
-    if (navigator.vibrate) navigator.vibrate(15);
+    this._haptic();
+    this._echoKey(btn.dataset.k);
     const st = this._hass.states[this._config.entity];
     const data = { key: btn.dataset.k };
     if (st && st.attributes.panel_entry_id) data.config_entry_id = st.attributes.panel_entry_id;
@@ -487,7 +506,7 @@ class OrisecKeypadCard extends HTMLElement {
   // followup: Quick Arm / cancel during an exit timer. In Ask mode it reuses the PIN that
   // started the exit (held in memory only, for EXIT_REUSE_SECONDS) instead of asking again.
   _run(label, fn, followup) {
-    if (navigator.vibrate) navigator.vibrate(30);
+    this._haptic("medium");
     const mode = this._pinMode();
     if (mode === "ask") {
       const r = this._exitPin;
@@ -566,7 +585,7 @@ class OrisecKeypadCard extends HTMLElement {
   }
 
   _padKey(d) {
-    if (navigator.vibrate) navigator.vibrate(15);
+    this._haptic();
     if (this._pin.length < 8) this._pin += d;
     this._padShow();
   }
@@ -1193,16 +1212,30 @@ class OrisecKeypadCard extends HTMLElement {
     const lcd = root.querySelector(".lcd");
     lcd.classList.toggle("off", down);
     if (!st) { lcd.innerHTML = `<div class="msg">Entity ${this._esc(this._config.entity)} not found</div>`; this._last = null; return; }
-    if (down) { lcd.innerHTML = `<div class="msg">Panel not responding</div>`; this._last = null; return; }
+    if (down) { lcd.innerHTML = `<div class="msg">Panel not responding</div>`; this._last = null; this._clkOff = null; return; }
     const layout = st.attributes.layout || [];
-    const key = JSON.stringify(layout);
+    if (this._holdBlank(layout, st)) return;
+    this._clockSeen(layout, st);
+    this._echoSeen(layout);
+    // The clock is ticked locally, so its text doesn't count as a screen change.
+    const key = JSON.stringify(layout, (k, v) => (v && v.clock ? { ...v, text: "" } : v)) + "|" + this._echoStars();
     if (key === this._last) return;
     this._last = key;
+    const echo = this._echoLine(layout);
     lcd.innerHTML = layout.map((line, i) => {
       const top = `top:${i * 25}%`;
       if (line.progress) {
         const [, max, val] = line.progress;
         return `<div class="row" style="${top}"><div class="bar"><div style="width:${Math.min(100, (val / (max || 1)) * 100)}%"></div></div></div>`;
+      }
+      if (echo && echo.home && i >= 1) {
+        // A digit on the home screen starts a code: show the code screen straight away.
+        const txt = i === 1 ? "Enter Passcode:" : i === 2 ? "*".repeat(echo.stars) : "";
+        return `<div class="row" style="${top}">${txt ? `<span class="seg center" style="left:50%">${txt}</span>` : ""}</div>`;
+      }
+      if (echo && echo.line === i) {
+        // Code entry: show the asterisks typed but not yet echoed by the panel straight away.
+        return `<div class="row" style="${top}"><span class="seg center" style="left:50%">${"*".repeat(echo.stars)}</span></div>`;
       }
       // A positioned segment, plus any that follow straight on from it (a style
       // change mid-text, e.g. the highlighted letter in the character picker).
@@ -1220,13 +1253,126 @@ class OrisecKeypadCard extends HTMLElement {
             return `<span class="alt"><ha-icon class="st a1" icon="${this._esc(i1)}"></ha-icon><ha-icon class="st a2" icon="${this._esc(i2)}"></ha-icon></span>`;
           }
           if (s.icon) return `<ha-icon class="st" icon="${this._esc(s.icon)}"></ha-icon>`;
-          const c = [s.inverted ? "inv" : "", s.size === 3 ? "small" : ""].join(" ").trim();
-          return `<span${c ? ` class="${c}"` : ""}>${this._esc(s.text)}</span>`;
+          const c = [s.inverted ? "inv" : "", s.size === 3 ? "small" : "", s.clock ? "clk" : ""].join(" ").trim();
+          const text = s.clock ? (this._clockText() || s.text) : s.text;
+          return `<span${c ? ` class="${c}"` : ""}>${this._esc(text)}</span>`;
         }).join("");
         return `<span class="seg ${first.align}" style="left:${(first.x / 128) * 100}%">${inner}</span>`;
       }).join("");
       return `<div class="row" style="${top}">${segs}</div>`;
     }).join("");
+  }
+
+  // ---- blank screen hold: the panel can send an empty screen for a moment while it
+  // changes mode (e.g. logging off the engineer menu). The wall keypad never shows it,
+  // so keep the last screen for up to BLANK_HOLD_MS; a screen still blank after that
+  // is shown as it is.
+  _holdBlank(layout, st) {
+    const blank = !layout.some((ln) => ln.progress || (ln.segments || []).some((s) => s.icon || (s.text || "").trim()));
+    if (!blank) { this._blankSince = null; clearTimeout(this._blankTimer); this._blankTimer = null; return false; }
+    const lcd = this.shadowRoot.querySelector(".lcd");
+    if (!lcd || !lcd.querySelector(".seg, .bar")) return false;  // nothing shown to hold
+    const now = Date.now();
+    if (this._blankSince == null) this._blankSince = now;
+    const left = BLANK_HOLD_MS - (now - this._blankSince);
+    if (left <= 0) return false;
+    if (!this._blankTimer) {
+      this._blankTimer = setTimeout(() => {
+        this._blankTimer = null;
+        const st2 = this._hass && this._hass.states[this._config.entity];
+        if (st2 && st2.state !== "unavailable" && st2.state !== "unknown") this._renderKeypad(st2, false);
+      }, left + 20);
+    }
+    return true;
+  }
+
+  // ---- local clock: estimate panel time minus phone time from each poll and tick it.
+  // A reading is the panel's whole seconds, a little old by the time it arrives, so it
+  // can only be behind the true time: follow the newest reading up at once, and only
+  // come down when readings stay over a second lower (or jump: the clock was set).
+  _clockSeen(layout, st) {
+    let seg = null;
+    layout.forEach((ln) => (ln.segments || []).forEach((s) => { if (s.clock) seg = s; }));
+    if (!seg) { this._clkOff = null; return; }
+    if (st.last_updated === this._clkStamp) return;
+    this._clkStamp = st.last_updated;
+    const m = /^(\d\d):(\d\d)\.(\d\d)$/.exec(seg.text || "");
+    if (!m) return;
+    // Time the reading from when HA stored it, so a stale state (e.g. the app's cached
+    // one on reopening) still lands in the right place. Fall back to the phone's clock
+    // if the two clocks disagree.
+    const now = Date.now() / 1000, lu = Date.parse(st.last_updated) / 1000;
+    const ref = lu > 0 && lu <= now + 5 && now - lu < 300 ? lu : now;
+    const off = (+m[1] * 3600 + +m[2] * 60 + +m[3]) - ref;
+    if (this._clkOff == null) { this._clkOff = off; return; }
+    const d = ((((off - this._clkOff + 43200) % 86400) + 86400) % 86400) - 43200;
+    if (d > 0 || d < -3) this._clkOff += d;
+    else if (d < -1.2) this._clkOff += d + 1;
+  }
+
+  _clockText() {
+    if (this._clkOff == null) return "";
+    const t = ((Math.floor(Date.now() / 1000 + this._clkOff) % 86400) + 86400) % 86400;
+    const p2 = (n) => String(n).padStart(2, "0");
+    return `${p2(Math.floor(t / 3600))}:${p2(Math.floor(t / 60) % 60)}.${p2(t % 60)}`;
+  }
+
+  _tickClock() {
+    if (this._view !== "keypad" || this._clkOff == null || !this.shadowRoot) return;
+    const text = this._clockText();
+    this.shadowRoot.querySelectorAll(".lcd .clk").forEach((el) => { if (el.textContent !== text) el.textContent = text; });
+  }
+
+  // ---- local echo: on the code entry screen, a digit shows its asterisk at once (the
+  // wall keypad does the same); the panel's own asterisks take over as they arrive.
+  _echoLine(layout) {
+    const e = this._echo;
+    if (e && e.home && e.pending) return { home: true, stars: e.pending };
+    const i = layout.findIndex((ln) => /pass ?code|code:/i.test((ln.segments || []).map((s) => s.text).join("")));
+    if (i < 0 || i + 1 >= layout.length) return null;
+    const next = (layout[i + 1].segments || []).map((s) => s.text).join("").trim();
+    if (next && !/^\*+$/.test(next)) return null;
+    const stars = this._echoStars();
+    return stars > next.length ? { line: i + 1, stars } : null;
+  }
+
+  _echoKey(k) {
+    const e = this._echo || (this._echo = { base: 0, pending: 0, at: 0 });
+    if (/^[0-9]$/.test(k) && this._echoable) {
+      if (!e.pending || e.home) { e.base = this._panelStars; e.pending = e.home ? e.pending : 0; e.home = false; }
+      e.pending += 1; e.at = Date.now();
+    } else if (/^[0-9]$/.test(k) && (this._homeScreen || e.home)) {
+      if (!e.home) { e.home = true; e.base = 0; e.pending = 0; }
+      e.pending += 1; e.at = Date.now();
+    } else {
+      e.pending = 0;
+    }
+    this._last = null;
+    this._renderKeypad(this._hass.states[this._config.entity], false);
+  }
+
+  _echoSeen(layout) {
+    const i = layout.findIndex((ln) => /pass ?code|code:/i.test((ln.segments || []).map((s) => s.text).join("")));
+    const next = i >= 0 && i + 1 < layout.length ? (layout[i + 1].segments || []).map((s) => s.text).join("").trim() : null;
+    this._echoable = next !== null && (!next || /^\*+$/.test(next));
+    this._panelStars = this._echoable ? next.length : 0;
+    // The home screen is the one with the clock (menus don't show it).
+    this._homeScreen = !this._echoable && layout.some((ln) => (ln.segments || []).some((s) => s.clock));
+    const e = this._echo;
+    if (!e || !e.pending) return;
+    if (Date.now() - e.at > 3000) { e.pending = 0; e.home = false; return; }
+    if (e.home) {
+      if (this._homeScreen) return;  // the panel hasn't switched to the code screen yet
+      if (!this._echoable) { e.pending = 0; e.home = false; return; }
+      e.home = false; e.base = 0;  // now on the code screen: its asterisks count from zero
+    }
+    // Drop the echo off the code screen, or once the panel has caught up.
+    if (!this._echoable || this._panelStars >= e.base + e.pending) { e.pending = 0; e.home = false; }
+  }
+
+  _echoStars() {
+    const e = this._echo;
+    return e && e.pending ? e.base + e.pending : 0;
   }
 
   _esc(t) {

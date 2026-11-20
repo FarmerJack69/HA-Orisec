@@ -93,3 +93,60 @@ def test_bad_pin_format_never_sent(bad):
     with pytest.raises(client.OrisecPinError):
         run(c.as_user(bad, p.build_arm_key(p.DISARM, 1)))
     assert c.sent == []
+
+
+class _QueueTransport(client._Transport):
+    """Hands out scripted reply frames, one per send, after a tiny delay each."""
+
+    def __init__(self, frames):
+        super().__init__()
+        self._script = list(frames)
+
+    async def open(self):
+        pass
+
+    def send(self, frame):
+        loop = asyncio.get_running_loop()
+        for i, r in enumerate(self._script.pop(0)):
+            loop.call_later(0.01 * (i + 1), self.frames.put_nowait, r)
+
+    @property
+    def is_open(self):
+        return True
+
+
+def _timed_request(transport_type, script, frame):
+    c = client.OrisecClient(CONN_CODE, transport=transport_type, host="h", port=1)
+    c._t = _QueueTransport(script)
+
+    async def go():
+        loop = asyncio.get_running_loop()
+        t0 = loop.time()
+        blocks = await c.request(frame)
+        return blocks, loop.time() - t0
+
+    return run(go())
+
+
+def test_stream_reply_returns_once_every_command_answered():
+    frame = p.build_query([(p.Q_SYS_STATE, 1, 2), (p.CMD_LCD, 1, 1)])
+    reply = p.build_frame([p.Block(p.Q_SYS_STATE, 1, 2, b"\x00\x00"), p.Block(p.CMD_LCD, 1, 1, b"x")])
+    blocks, took = _timed_request("tcp", [[reply]], frame)
+    assert {b.cmd for b in blocks} == {p.Q_SYS_STATE, p.CMD_LCD}
+    assert took < client.REPLY_SETTLE  # no settle wait
+
+
+def test_stream_reply_split_over_frames_waits_for_the_rest():
+    frame = p.build_query([(p.Q_SYS_STATE, 1, 2), (p.CMD_LCD, 1, 1)])
+    a = p.build_frame([p.Block(p.Q_SYS_STATE, 1, 2, b"\x00\x00")])
+    b = p.build_frame([p.Block(p.CMD_LCD, 1, 1, b"x")])
+    blocks, took = _timed_request("tcp", [[a, b]], frame)
+    assert {blk.cmd for blk in blocks} == {p.Q_SYS_STATE, p.CMD_LCD}
+    assert took < client.REPLY_SETTLE
+
+
+def test_udp_still_waits_the_settle_time():
+    frame = p.build_query([(p.Q_SYS_STATE, 1, 2)])
+    reply = p.build_frame([p.Block(p.Q_SYS_STATE, 1, 2, b"\x00\x00")])
+    blocks, took = _timed_request("udp", [[reply]], frame)
+    assert len(blocks) == 1 and took >= client.REPLY_SETTLE

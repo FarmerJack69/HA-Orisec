@@ -24,6 +24,7 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry) -> dict
         "part_sets": c.config.part_names,
         "zones": [asdict(z) | {"type_name": z.type_name, "is_sensor": z.is_sensor} for z in c.config.zones],
         "last_update_success": c.last_update_success,
+        "poll_stats": c.poll_stats(),
     }
     if data is not None:
         out["system_state"] = data.snapshot.sys_state

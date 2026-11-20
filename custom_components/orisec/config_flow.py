@@ -23,8 +23,9 @@ from .const import (
     DEFAULT_CLOCK_TOLERANCE,
     CONF_TRANSPORT,
     DEFAULT_BAUD,
-    DEFAULT_POLL_SECONDS,
     DOMAIN,
+    poll_limits,
+    poll_seconds,
 )
 from .protocol import DEFAULT_PORT
 
@@ -203,11 +204,13 @@ class OrisecOptionsFlow(OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(data=user_input)
         opts = self.config_entry.options
-        current = opts.get(CONF_POLL_INTERVAL, DEFAULT_POLL_SECONDS)
+        transport = self.config_entry.data.get(CONF_TRANSPORT)
+        low, _ = poll_limits(transport)
+        current = poll_seconds(transport, opts.get(CONF_POLL_INTERVAL))
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema({
-                vol.Required(CONF_POLL_INTERVAL, default=current): vol.All(vol.Coerce(float), vol.Range(min=1, max=60)),
+                vol.Required(CONF_POLL_INTERVAL, default=current): vol.All(vol.Coerce(float), vol.Range(min=low, max=60)),
                 vol.Required(CONF_CLOCK_SYNC, default=opts.get(CONF_CLOCK_SYNC, DEFAULT_CLOCK_SYNC)): bool,
                 vol.Required(
                     CONF_CLOCK_TOLERANCE, default=opts.get(CONF_CLOCK_TOLERANCE, DEFAULT_CLOCK_TOLERANCE)

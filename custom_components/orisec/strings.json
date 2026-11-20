@@ -258,7 +258,7 @@
           "clock_tolerance": "Clock drift allowed (seconds)"
         },
         "data_description": {
-          "poll_interval": "How often to ask the panel for status. 2 is responsive; higher is gentler on the CM2.",
+          "poll_interval": "How often to ask the panel for status. USB and serial bridge: 0.2 s or more (default 1). CM2: 1 s or more (default 2); higher is gentler on the CM2.",
           "clock_sync": "Sets the panel's time and date to HA's when it drifts, at most once an hour, never while an area is setting, in entry or in alarm. Turn off the panel's own \"sync clock from cloud\" so the two don't compete.",
           "clock_tolerance": "Sync when the panel is this many seconds ahead of or behind HA."
         }

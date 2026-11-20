@@ -249,7 +249,8 @@ def test_lcd_layout_home_screen():
     lines = decode_lcd(stream, time=(18, 32, 52))
     assert lines[0].text == "02 Nov 18:32.52"
     right = [s for s in lines[0].segments if s.align == "right"][0]
-    assert right.text == "18:32.52"
+    assert right.text == "18:32.52" and right.clock
+    assert not any(seg.clock for seg in decode_lcd(stream)[0].segments)  # no time given: no clock
     small = [s for s in lines[0].segments if s.text == "02 Nov"][0]
     assert (small.x, small.size) == (0x47, 3)
     assert lines[2].text == "Test Site" and lines[2].segments[0].align == "center"
@@ -406,3 +407,11 @@ def test_lcd_reset_screen():
     assert lines[0].text == "Call ARC"
     assert lines[1].text == "to reset system"
     assert "✓=Exit" in lines[3].text and "✕=User Menu" in lines[3].text
+
+
+def test_lcd_clock_mid_text_keeps_following_text():
+    from orisec_protocol import decode_lcd
+
+    stream = bytes([0x12]) + b"At " + bytes([0x0C]) + b" ok"
+    segs = decode_lcd(stream, time=(9, 5, 7))[0].segments
+    assert [(s.text, s.clock, s.cont) for s in segs] == [("At ", False, False), ("09:05.07", True, True), (" ok", False, True)]

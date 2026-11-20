@@ -340,6 +340,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: OrisecConfigEntry) -> bo
         await client.close()
         raise ConfigEntryNotReady(str(err)) from err
     await coordinator.async_config_entry_first_refresh()
+    coordinator.start_polling()
     _remove_stale_areas(hass, entry, coordinator)
     names = coordinator.area_names()
     notifier = Notifier(hass, entry.entry_id, names.get(1) or entry.title)

@@ -819,6 +819,7 @@ class LcdSegment:
     size: int = 0  # 0..3 (3 = small)
     cont: bool = False  # follows straight on from the previous segment (style change mid-text)
     icon: str = ""  # a status icon (mdi name) instead of text
+    clock: bool = False  # the panel time (0x0C): the card ticks it locally, as the wall keypad does
 
 
 @dataclass
@@ -904,9 +905,17 @@ def decode_lcd(stream: bytes, time: tuple[int, int, int] | None = None) -> list[
         elif b == 0x0B:
             start(seg.x if seg else 0, "right")
         elif b == 0x0C:
-            if time is not None:
-                for ch in f"{time[0]:02d}:{time[1]:02d}.{time[2]:02d}":
-                    add(ch)
+            if time is not None and cur >= 0:
+                # Its own segment, so the card can tick it between polls; text after
+                # it carries straight on in a new segment.
+                cont = seg is not None and bool(seg.text or seg.icon)
+                x = seg.x if seg is not None else 0
+                align = seg.align if seg is not None else "left"
+                flush()
+                lines[cur].segments.append(LcdSegment(
+                    f"{time[0]:02d}:{time[1]:02d}.{time[2]:02d}", x, align, inverted, size, cont, clock=True,
+                ))
+                seg = LcdSegment("", x, align, inverted, size, True)
         elif b == 0x0E:
             if cur >= 0 and i + 3 < len(stream):
                 flush()

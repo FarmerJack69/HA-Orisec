@@ -6,6 +6,7 @@ import asyncio
 import logging
 import math
 import time
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
@@ -21,21 +22,30 @@ from .const import (
     CONF_CLOCK_SYNC,
     CONF_CLOCK_TOLERANCE,
     CONF_POLL_INTERVAL,
+    CONF_TRANSPORT,
     DEFAULT_CLOCK_SYNC,
     DEFAULT_CLOCK_TOLERANCE,
-    DEFAULT_POLL_SECONDS,
     DOMAIN,
-    EVENT_EVERY,
     EVENT_ORISEC,
-    FLAG_EVERY,
     UNAVAILABLE_AFTER_SECONDS,
     ZONE_NAME_BATCH,
+    poll_seconds,
 )
 
 _LOGGER = logging.getLogger(__name__)
 # Polls the clock offset is the median of (smooths the 1 s jitter between the clocks).
 CLOCK_SAMPLES = 31
-ZONE_STATS_EVERY = 5  # read per-zone timers/counts every N polls
+# Extra reads run on timers (seconds), not every N polls, so a faster poll only
+# speeds up the main status read. At most one of the rotating extras runs per poll.
+EVENTS_EVERY_S = 2.0  # panel log check
+FLAGS_EVERY_S = 30.0  # per-zone 1150 setting (rarely changes)
+EXTRAS_EVERY_S = {  # name -> seconds between runs
+    "zone_stats": 5.0,
+    "panel_power": 20.0,
+    "wireless": 5.0,
+    "device": 5.0,
+}
+RTT_SAMPLES = 600  # main-read round trips kept for the poll stats
 ZONE_STATS_BATCH = 16  # zones per request
 WIRELESS_BATCH = 4  # zones per 10810 request when probing (44 bytes each)
 DEVICE_BATCH = 4  # slots per 12510 request when probing (42 bytes each)
@@ -134,10 +144,15 @@ class OrisecCoordinator(DataUpdateCoordinator[PanelData]):
     config: PanelConfig
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry, client: OrisecClient) -> None:
-        seconds = float(entry.options.get(CONF_POLL_INTERVAL, DEFAULT_POLL_SECONDS))
+        seconds = poll_seconds(entry.data.get(CONF_TRANSPORT), entry.options.get(CONF_POLL_INTERVAL))
+        # HA's scheduler times each refresh from the start of the current whole second,
+        # so below 1 s it polls back to back for most of every second (20+ polls/s over
+        # USB). Sub-second intervals use our own loop instead (start_polling).
+        self._interval = seconds
+        self._own_loop = seconds < 1
         super().__init__(
             hass, _LOGGER, name=f"{DOMAIN} {client.label}",
-            update_interval=timedelta(seconds=seconds), config_entry=entry,
+            update_interval=None if self._own_loop else timedelta(seconds=seconds), config_entry=entry,
         )
         # Last arm key HA sent per area, so Quick Arm can repeat the same set type.
         self.exit_key: dict[int, tuple[int, float]] = {}  # area -> (key, monotonic time)
@@ -148,6 +163,12 @@ class OrisecCoordinator(DataUpdateCoordinator[PanelData]):
         self._misses = 0
         self._poll = 0
         self._flag: list[int] = []
+        # Monotonic time each timed read is next due (0 = straight away).
+        self._due: dict[str, float] = {"events": 0.0, "flags": 0.0, **dict.fromkeys(EXTRAS_EVERY_S, 0.0)}
+        # Poll statistics (diagnostics), for judging how fast the link can poll.
+        self._rtt: deque[float] = deque(maxlen=RTT_SAMPLES)
+        self._timed_task: asyncio.Task | None = None
+        self._stats = {"polls": 0, "misses": 0, "relogins": 0, "started": time.monotonic()}
         self._logged_in = False
         # New panel log entries and zones going active are passed to these
         # (notifications), and fired on the bus as "orisec_event" for automations.
@@ -283,6 +304,71 @@ class OrisecCoordinator(DataUpdateCoordinator[PanelData]):
         if (pw := p.parse_panel_power(blocks)) is not None:
             self.panel_power = pw
 
+    def _take_due(self, name: str, every: float, now: float) -> bool:
+        """True (and schedule the next run) if the timed read `name` is due."""
+        if now < self._due[name]:
+            return False
+        self._due[name] = now + every
+        return True
+
+    async def _timed_reads(self) -> None:
+        """Panel log check and at most one rotating extra read, when due."""
+        mono = time.monotonic()
+        if self._take_due("events", EVENTS_EVERY_S, mono):
+            try:
+                await self._check_events()
+            except Exception:  # noqa: BLE001 - never let the log watcher break polling
+                _LOGGER.debug("Event log check failed", exc_info=True)
+        for name, every in EXTRAS_EVERY_S.items():
+            if self._take_due(name, every, mono):
+                await self._run_extra(name)
+                break  # at most one extra per poll keeps the gap between polls short
+
+    async def _run_extra(self, name: str) -> None:
+        if name == "zone_stats":
+            await self._read_zone_stats()
+        elif name == "wireless":
+            await self._read_wireless_next()
+        elif name == "device":
+            await self._read_device_next()
+        elif name == "panel_power":
+            await self._read_panel_power()
+
+    def poll_stats(self) -> dict:
+        """How the polling is going, for diagnostics (testing faster poll rates)."""
+        rtt = sorted(self._rtt)
+        up = max(time.monotonic() - self._stats["started"], 1e-9)
+
+        def ms(x: float) -> int:
+            return round(x * 1000)
+
+        return {
+            "transport": self.client.transport_type,
+            "poll_interval_s": self._interval,
+            "uptime_s": round(up),
+            "polls": self._stats["polls"],
+            "polls_per_s": round(self._stats["polls"] / up, 2),
+            "misses": self._stats["misses"],
+            "relogins": self._stats["relogins"],
+            "miss_rate_pct": round(100 * self._stats["misses"] / max(self._stats["polls"], 1), 2),
+            "rtt_samples": len(rtt),
+            "rtt_ms_median": ms(rtt[len(rtt) // 2]) if rtt else None,
+            "rtt_ms_p95": ms(rtt[int(len(rtt) * 0.95)]) if rtt else None,
+            "rtt_ms_max": ms(rtt[-1]) if rtt else None,
+        }
+
+    def start_polling(self) -> None:
+        """Start the sub-second poll loop (after the first refresh); HA polls otherwise."""
+        if self._own_loop:
+            self.config_entry.async_create_background_task(self.hass, self._poll_loop(), "orisec poll loop")
+
+    async def _poll_loop(self) -> None:
+        # Wait the interval after each poll finishes; async_refresh logs and
+        # publishes failures itself, so the loop keeps going through them.
+        while True:
+            await asyncio.sleep(self._interval)
+            await self.async_refresh()
+
     async def _async_update_data(self) -> PanelData:
         if self.client.relogin_needed:
             self.client.relogin_needed = False
@@ -301,18 +387,23 @@ class OrisecCoordinator(DataUpdateCoordinator[PanelData]):
             *((q, 1, 1) for q in p.CLOCK_PARAMS),
         ]
 
-        if self._poll % FLAG_EVERY == 0:
+        mono = time.monotonic()
+        if self._take_due("flags", FLAGS_EVERY_S, mono):
             reads.append((p.Q_ZONE_FLAG, 1, len(self.config.zones)))
         self._poll += 1
+        self._stats["polls"] += 1
 
+        sent = time.monotonic()
         blocks = await self.client.read(reads)
         now = dt_util.now().replace(tzinfo=None, microsecond=0)
         if blocks is None or not blocks:
             self._misses += 1
+            self._stats["misses"] += 1
             _LOGGER.debug("No reply from panel (%d in a row)", self._misses)
             if self._misses >= self._max_misses:
                 # Force a fresh login on the next attempt; the panel's comms may have restarted.
                 self._logged_in = False
+                self._stats["relogins"] += 1
                 await self.client.close()
                 raise UpdateFailed(
                     f"Panel via {self.client.label} is not responding"
@@ -320,11 +411,14 @@ class OrisecCoordinator(DataUpdateCoordinator[PanelData]):
             if self.data is None:
                 raise UpdateFailed("No reply from panel")
             return self.data  # one missed poll: keep last good data briefly
+        self._rtt.append(time.monotonic() - sent)
 
         snap = p.parse_snapshot(blocks)
         if p.Q_SYS_STATE not in snap.seen:
             # Usually an error reply ("not logged in") after the panel restarted its comms.
             self._misses += 1
+            self._stats["misses"] += 1
+            self._stats["relogins"] += 1
             self._logged_in = False
             raise UpdateFailed("Panel reply had no system state; will log in again")
         self._misses = 0
@@ -332,19 +426,12 @@ class OrisecCoordinator(DataUpdateCoordinator[PanelData]):
             self._flag = snap.zone_flag
         if self.data is not None:
             self._zone_edges(self.data.snapshot.zone_status, snap.zone_status)
-        if self._poll % EVENT_EVERY == 0:
-            try:
-                await self._check_events()
-            except Exception:  # noqa: BLE001 - never let the log watcher break polling
-                _LOGGER.debug("Event log check failed", exc_info=True)
-        if self._poll % ZONE_STATS_EVERY == 1:
-            await self._read_zone_stats()
-        elif self._poll % ZONE_STATS_EVERY == 3:
-            await self._read_wireless_next()
-        elif self._poll % ZONE_STATS_EVERY == 4:
-            await self._read_device_next()
-        elif self._poll % ZONE_STATS_EVERY == 2 and self._poll % (ZONE_STATS_EVERY * 4) == 2:
-            await self._read_panel_power()  # every 20th poll
+        # The log check and extras run after this poll's data is published, so they
+        # never hold up the screen; they delay the next poll a little instead.
+        if self._timed_task is None or self._timed_task.done():
+            self._timed_task = self.config_entry.async_create_background_task(
+                self.hass, self._timed_reads(), "orisec timed reads"
+            )
         snap.zone_timers = self._zone_timers
         snap.zone_counts = self._zone_counts
         clock = p.parse_clock(blocks)

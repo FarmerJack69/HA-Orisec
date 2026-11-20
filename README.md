@@ -6,7 +6,7 @@ A local Home Assistant integration for **Orisec intruder alarm panels**, with a 
 
 > **Unofficial.** This project has no connection with Orisec Ltd and isn't endorsed or supported by them. "Orisec" and "ControlPlus" are Orisec's names, used here only to say which panels this works with. Don't contact Orisec or your installer about this integration; [open an issue](../../issues) instead.
 
-> **Status: 0.4.2, early public release.** Used daily on a CP50 (firmware 9.10). Other panels and firmware are untested: reports welcome.
+> **Status: 0.4.3, early public release.** Used daily on a CP50 (firmware 9.10). Other panels and firmware are untested: reports welcome.
 
 [![Open your Home Assistant instance and open this repository in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=FarmerJack69&repository=HA-Orisec&category=integration)
 
@@ -24,11 +24,12 @@ A local Home Assistant integration for **Orisec intruder alarm panels**, with a 
 - **Network devices** (keypads, wireless expanders, external sounders): each is its own device, with light level, voltage, current and comms error counts; sounders also report their own battery.
 - **Panel power** and **fault sensors**: supply and battery voltage, currents, mains fault, battery fault, tamper, trouble, engineer required.
 - **Keypad display** sensor (the live LCD) and an `orisec.send_key` action.
-- **Keypad card**: Home (areas, Full / part sets / Disarm / Quick Arm / Reset), Zones (status, signal, Omit, Notify), Activity, Log (the panel's event log) and Keypad (every key and the live LCD with status icons).
+- **Keypad card**: Home (areas, Full / part sets / Disarm / Quick Arm / Reset), Zones (status, signal, Omit, Notify), Activity, Log (the panel's event log) and Keypad (every key and the live LCD with status icons). Haptic feedback in the Companion app, asterisks that appear as you type, and a clock that ticks like the wall keypad's.
 - **Per-user PIN** (optional): arm, disarm, reset and omit as a particular panel user, so the panel's log shows who did it. Each phone or wall screen chooses No PIN / Ask / Remember.
 - **Per-user notifications** to each HA user's phones, sorted into the same categories as the app, with areas, zones and critical alerts. An `orisec_event` is fired for every new log entry, for your own automations.
 - **Panel clock**: an offset sensor, a *Sync panel clock* button and `orisec.set_clock` action, and optional automatic sync.
 - **Zone omit / reinstate** and the **event log** using the panel's own commands.
+- **Adjustable poll interval** (Configure): 0.2–60 s over USB or a serial bridge (default 1 s), 1–60 s over the CM2 (default 2 s).
 - **Reliability**: if the panel stops answering, entities go *unavailable* within about 10 seconds rather than showing a stale state, and the integration logs back in by itself.
 - **Reconfigure**, **re-authenticate** and **diagnostics** download (codes, addresses and the panel serial are redacted).
 

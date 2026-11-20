@@ -311,11 +311,21 @@ class OrisecClient:
             return await self._request(frame)
 
     async def _request(self, frame: bytes) -> list[p.Block] | None:
-        """request() without taking the lock; the caller must hold it."""
+        """request() without taking the lock; the caller must hold it.
+
+        Over the CM2 a reply can come in several datagrams, so it waits REPLY_SETTLE
+        for more after the first. Over USB or the bridge it stops as soon as every
+        command asked for has answered (or the panel sent an error), which saves
+        that wait on almost every request.
+        """
         t = await self._ensure_open()
         q = t.frames
         t.discard_pending()
         t.error = None
+        want: set[int] = set()
+        if self.transport_type in (TRANSPORT_TCP, TRANSPORT_SERIAL):
+            with contextlib.suppress(p.FrameError):
+                want = {b.cmd for b in p.parse_frame(frame)}
         t.send(frame)
         try:
             first = await asyncio.wait_for(q.get(), REPLY_TIMEOUT)
@@ -323,20 +333,28 @@ class OrisecClient:
             if t.error:
                 _LOGGER.debug("Error on %s: %s", self.label, t.error)
             return None
-        replies = [first]
+        blocks: list[p.Block] = []
+        seen: set[int] = set()
+
+        def take(r: bytes) -> None:
+            try:
+                got = p.parse_frame(r)
+            except p.FrameError:
+                return  # unsolicited/other-format packets (e.g. CM2 pushes) are ignored
+            blocks.extend(got)
+            seen.update(b.cmd for b in got)
+
+        def complete() -> bool:
+            return bool(want) and (want <= seen or p.CMD_ERROR in seen)
+
+        take(first)
         loop = asyncio.get_running_loop()
         deadline = loop.time() + REPLY_SETTLE
-        while (left := deadline - loop.time()) > 0:
+        while not complete() and (left := deadline - loop.time()) > 0:
             try:
-                replies.append(await asyncio.wait_for(q.get(), left))
+                take(await asyncio.wait_for(q.get(), left))
             except TimeoutError:
                 break
-        blocks: list[p.Block] = []
-        for r in replies:
-            try:
-                blocks.extend(p.parse_frame(r))
-            except p.FrameError:
-                continue  # unsolicited/other-format packets (e.g. CM2 pushes) are ignored
         return blocks
 
     async def login(self) -> p.LoginInfo:
